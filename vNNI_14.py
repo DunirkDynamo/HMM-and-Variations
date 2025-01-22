@@ -7,6 +7,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
 import math
 
+
 class State:
     def __init__(self, mean, variance, duration_dist=None, duration_dist_params=None):
         # For the normally distributed current samples:
@@ -19,7 +20,6 @@ class State:
                         
     def prob_n(self, n, sample_rate):
         from scipy.integrate import quad
-        
         t1 = quad(self.duration_dist, n/sample_rate, (n+1)/sample_rate, tuple(self.duration_dist_params))[0]
         t2 = quad(self.duration_dist, (n-1)/sample_rate, n/sample_rate, tuple(self.duration_dist_params))[0]
         J  = (n+1) * t1 - (n-1) * t2
@@ -34,10 +34,10 @@ class State:
         W  = (t3 - t4)*sample_rate
 
         output = J + W
-
         return output
     
     def joint_n_xvec(self, x, gamma, tol):
+
         # Computing the Normal portion of the joint probability vector (n, x), where x is itself a vector of length n
         n = len(x)
         delta = x - self.mean
@@ -48,16 +48,6 @@ class State:
         
         
         # Computing the probability of n
-        '''
-        n         = len(x)
-        low_bound = (n-1)*gamma
-        upp_bound = (n+1)*gamma
-        
-        if tol:
-            ndensity = quad(self.duration_dist, low_bound, upp_bound, tuple(self.duration_dist_params), epsabs=tol)
-        else:
-            ndensity = quad(self.duration_dist, low_bound, upp_bound, tuple(self.duration_dist_params))
-        '''
         ndensity = self.prob_n(n, 1./gamma)
         
         
@@ -79,21 +69,9 @@ class State:
         log_xdensity = log_A - n*vhat/2/self.variance
         
         # Computing the probability of n
-        '''
-        n         = len(x)
-        low_bound = (n-1)*gamma
-        upp_bound = (n+1)*gamma
-        
-        if tol:
-            ndensity = quad(self.duration_dist, low_bound, upp_bound, tuple(self.duration_dist_params), epsabs=tol)
-        else: 
-            ndensity = quad(self.duration_dist, low_bound, upp_bound, tuple(self.duration_dist_params))
-        '''
         ndensity = self.prob_n(n, 1./gamma)
-            
         # Computing joint of n and x:
         log_joint_density = np.log(ndensity) + log_xdensity
-        
         return log_joint_density
 
     def draw(self, num_samples=1):
@@ -236,15 +214,11 @@ class DataFramePlotterApp:
         self.number_of_states = None
         self.uniform_var        = tk.BooleanVar(value=False)
         self.state_means        = []
-        self.state_stds         = []
+        self.state_vars         = []
         self.sample_rate        = None # this is a variable that must be defined for some of the decoder algorithms
-        self.state_changepoints = np.array([]) # this is used by the 2-stage vector-state HMM
-
-
-        # Select model button (initially hidden)
-        self.sample_rate    = None
-        self.max_chunk_size = None
-        self.changepoints   = []
+        self.sample_rate        = None
+        self.max_chunk_size     = None
+        self.changepoints       = [] # this is used by the 2-stage vector-state HMM
 
 
 
@@ -313,9 +287,9 @@ class DataFramePlotterApp:
         Outputs:
             None. Resets instance variables and hides input fields.
         """
-        self.sample_rate = None
+        self.sample_rate    = None
         self.max_chunk_size = None
-        self.changepoints = []
+        self.changepoints   = []
 
         for widget in self.processing_frame.winfo_children():
             if isinstance(widget, (ttk.Entry, ttk.Label, ttk.Button)) and widget not in [self.select_button, self.export_button]:
@@ -547,31 +521,31 @@ class DataFramePlotterApp:
         except ValueError as e:
             messagebox.showerror("Error", str(e))
 
-    def confirm_state_stds(self):
-        """Validate and display the state standard deviations with a header."""
+    def confirm_state_vars(self):
+        """Validate and display the state variances with a header."""
         try:
-            raw_stds = self.state_stds_entry.get().split(",")
-            stds = [float(s) for s in raw_stds]
-            if len(stds) != self.number_of_states:
+            raw_vars = self.state_vars_entry.get().split(",")
+            vars     = [float(s) for s in raw_vars]
+            if len(vars) != self.number_of_states:
                 raise ValueError(
-                    f"Number of standard deviations must match number of states ({self.number_of_states})."
+                    f"Number of variances must match number of states ({self.number_of_states})."
                 )
-            self.state_stds = stds
+            self.state_vars = vars
 
-            # Add header for State Standard Deviations
+            # Add header for State variances
             header_label = ttk.Label(
-                self.shared_scrollable_frame, text="State Standard Deviations", font=("Arial", 10, "bold")
+                self.shared_scrollable_frame, text="State Variances", font=("Arial", 10, "bold")
             )
             header_label.grid(row=0, column=1, padx=20, pady=5, sticky="w")
 
-            # Add updated standard deviations to the shared scrollable frame
-            for i, std in enumerate(self.state_stds):
-                std_label = ttk.Label(
-                    self.shared_scrollable_frame, text=f"State-{i}: {std:.4f}", name=f"stds-{i}"
+            # Add updated varainces to the shared scrollable frame
+            for i, var in enumerate(self.state_vars):
+                var_label = ttk.Label(
+                    self.shared_scrollable_frame, text=f"State-{i}: {var:.4f}", name=f"vars-{i}"
                 )
-                std_label.grid(row=i + 1, column=1, padx=20, pady=5, sticky="w")
+                var_label.grid(row=i + 1, column=1, padx=20, pady=5, sticky="w")
 
-            messagebox.showinfo("Success", "State standard deviations set successfully!")
+            messagebox.showinfo("Success", "State variances set successfully!")
         except ValueError as e:
             messagebox.showerror("Error", str(e))
 
@@ -722,21 +696,21 @@ class DataFramePlotterApp:
         )
         self.state_means_confirm_button.grid(row=2, column=0, padx=5, pady=5, sticky="w")
 
-        # Standard Deviations section
-        self.state_stds_label = ttk.Label(
-            self.emission_param_frame, text="State Standard Deviations (comma-separated):"
+        # Variances section
+        self.state_vars_label = ttk.Label(
+            self.emission_param_frame, text="State Variances (comma-separated):"
         )
-        self.state_stds_label.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+        self.state_vars_label.grid(row=0, column=1, padx=5, pady=5, sticky="w")
 
-        self.state_stds_entry = ttk.Entry(self.emission_param_frame)
-        self.state_stds_entry.grid(row=1, column=1, padx=5, pady=5, sticky="w")
+        self.state_vars_entry = ttk.Entry(self.emission_param_frame)
+        self.state_vars_entry.grid(row=1, column=1, padx=5, pady=5, sticky="w")
 
-        self.state_stds_confirm_button = ttk.Button(
-            self.emission_param_frame, text="Confirm", command=self.confirm_state_stds
+        self.state_vars_confirm_button = ttk.Button(
+            self.emission_param_frame, text="Confirm", command=self.confirm_state_vars
         )
-        self.state_stds_confirm_button.grid(row=2, column=1, padx=5, pady=5, sticky="w")
+        self.state_vars_confirm_button.grid(row=2, column=1, padx=5, pady=5, sticky="w")
 
-        # Add a shared scrolling canvas to display the means and standard deviations of the emission distributions
+        # Add a shared scrolling canvas to display the means and variances of the emission distributions
         self.shared_scroll_canvas = tk.Canvas(self.emission_param_frame, height=150)
         self.shared_scroll_canvas.grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")  # Updated alignment
 
@@ -938,7 +912,7 @@ class DataFramePlotterApp:
 
 
 
-    def log_sum_exp(log_probs):
+    def log_sum_exp(self, log_probs):
         """
         Computes the log of the sum of exponentials of input log probabilities.
         This avoids underflow/overflow issues with small probabilities.
@@ -1160,7 +1134,7 @@ class DataFramePlotterApp:
             return {'State Estimates' : fitted_states, 'Emission Estimates' : fitted_y}
         
         elif self.fitModelChoice == 'Viterbi ---> 2-Stage Changepoint-Vector-State HMM':
-            fitted_states, fitted_y = self.run_2stage_changepoint_vector_state_hmm(y_data, self.state_changepoints, 1./self.sample_rate)
+            fitted_states, fitted_y = self.run_2stage_changepoint_vector_state_hmm(y_data, self.changepoints, 1./self.sample_rate)
             return {'State Estimates' : fitted_states, 'Emission Estimates' : fitted_y}
             
         return 
@@ -1213,13 +1187,13 @@ class DataFramePlotterApp:
         try:
             # Read and validate changepoints
             raw_changepoints = self.changepoints_entry.get().split(",")
-            self.state_changepoints = [int(cp.strip()) for cp in raw_changepoints]
+            self.changepoints = [int(cp.strip()) for cp in raw_changepoints]
 
             # Ensure values are sorted and within the valid range
-            if any(cp < 0 or cp >= len(self.df[self.column2_combobox.get()].values) for cp in self.state_changepoints):
+            if any(cp < 0 or cp >= len(self.df[self.column2_combobox.get()].values) for cp in self.changepoints):
                 raise ValueError("Changepoint indices must be non-negative and less than the length of the dataset.")
 
-            if sorted(self.state_changepoints) != self.state_changepoints:
+            if sorted(self.changepoints) != self.changepoints:
                 raise ValueError("Changepoint indices must be in ascending order.")
 
             messagebox.showinfo("Success", "Changepoints confirmed successfully!")
@@ -1233,26 +1207,26 @@ class DataFramePlotterApp:
 
     def get_hmm_params(self):
         """Retrieve HMM parameters from the Model Frame for use in run_viterbi_hmm."""
-        return self.initial_probabilities, self.state_means, self.state_stds, self.transition_matrix
+        return self.initial_probabilities, self.state_means, self.state_vars, self.transition_matrix
     
     def get_hsmm_params(self):
         """Retrieve HSMM parameters from the Model Frame for use in run_viterbi_hsmm."""
-        return self.initial_probabilities, self.state_means, self.state_stds, self.transition_matrix, self.hsmm_parameters["d"], self.hsmm_parameters["v"], self.hsmm_parameters["s"]
+        return self.initial_probabilities, self.state_means, self.state_vars, self.transition_matrix, self.hsmm_parameters["d"], self.hsmm_parameters["v"], self.hsmm_parameters["s"]
              
 
 
 
     def run_viterbi_hmm(self, y_data):
-        start_prob, means, stds, transition_matrix = self.get_hmm_params()
-        states                                    = [State(mean, std**2, ) for mean, std in zip(means, stds)]
+        start_prob, means, vars, transition_matrix = self.get_hmm_params()
+        states                                    = [State(mean, var, ) for mean, var in zip(means, vars)]
         viterbi_hmm_out                           = self.log_viterbi_algorithm(y_data, states, start_prob, transition_matrix)
         best_path                                 = viterbi_hmm_out[0]
         emission_estimates                        = np.array([means[i] for i in best_path])
         return best_path, emission_estimates
     
     def run_fwd_bwd(self, y_data):
-        start_prob, means, stds, transition_matrix = self.get_hmm_params()
-        states                                    = [State(mean, std**2, ) for mean, std in zip(means, stds)]
+        start_prob, means, vars, transition_matrix = self.get_hmm_params()
+        states                                    = [State(mean, vars, ) for mean, var in zip(means, vars)]
         fb_out                                    = self.forward_backward_log(y_data, states, np.log(start_prob), np.log(transition_matrix))
 
         best_states = fb_out[1]
@@ -1260,10 +1234,10 @@ class DataFramePlotterApp:
         return best_states, emission_estimates
 
     def run_timedep_pseudohmm_strong(self, y_data, sample_rate):
-        start_prob, means, stds, transition_matrix, d_params, v_params, s_params = self.get_hsmm_params()
+        start_prob, means, vars, transition_matrix, d_params, v_params, s_params = self.get_hsmm_params()
         dvs_params                                                               = [[d,v,s] for d,v,s in zip(d_params, v_params, s_params)]
 
-        states          = [State(mean, std**2, self.inverse_gauss_phys, dvs) for mean, std, dvs in zip(means, stds, dvs_params)]
+        states          = [State(mean, var, self.inverse_gauss_phys, dvs) for mean, var, dvs in zip(means, vars, dvs_params)]
         cdf_table       = []
 
 
@@ -1281,10 +1255,10 @@ class DataFramePlotterApp:
 
     
     def run_timedep_pseudohmm_weak(self, y_data, sample_rate):
-        start_prob, means, stds, transition_matrix, d_params, v_params, s_params = self.get_hsmm_params()
+        start_prob, means, vars, transition_matrix, d_params, v_params, s_params = self.get_hsmm_params()
         dvs_params                                                               = [[d,v,s] for d,v,s in zip(d_params, v_params, s_params)]
 
-        states          = [State(mean, std**2, self.inverse_gauss_phys, dvs) for mean, std, dvs in zip(means, stds, dvs_params)]
+        states          = [State(mean, var, self.inverse_gauss_phys, dvs) for mean, var, dvs in zip(means, vars, dvs_params)]
         cdf_table       = []
 
 
@@ -1300,10 +1274,10 @@ class DataFramePlotterApp:
         emission_estimates = np.array([means[i] for i in best_path])
         return best_path, emission_estimates
     def run_hsmm(self, y_data, sample_rate):
-        start_prob, means, stds, transition_matrix, d_params, v_params, s_params = self.get_hsmm_params()
+        start_prob, means, vars, transition_matrix, d_params, v_params, s_params = self.get_hsmm_params()
         dvs_params                                                               = [[d,v,s] for d,v,s in zip(d_params, v_params, s_params)]
 
-        states          = [State(mean, std**2, self.inverse_gauss_phys, dvs) for mean, std, dvs in zip(means, stds, dvs_params)]
+        states          = [State(mean, var, self.inverse_gauss_phys, dvs) for mean, var, dvs in zip(means, vars, dvs_params)]
         cdf_table       = []
 
 
@@ -1340,8 +1314,8 @@ class DataFramePlotterApp:
         return best_path, emission_estimates
 
     def run_avg_chunked_hmm(self, y_data, max_chunk_size):
-        start_prob, means, stds, transition_matrix = self.get_hmm_params()
-        states                                    = [State(mean, std**2, ) for mean, std in zip(means, stds)]
+        start_prob, means, vars, transition_matrix = self.get_hmm_params()
+        states                                    = [State(mean, var, ) for mean, var in zip(means, vars)]
         
 
 
@@ -1391,8 +1365,8 @@ class DataFramePlotterApp:
 
 
     def run_fwdbwd_hmm(self, y_data):
-        start_prob, means, stds, transition_matrix = self.get_hmm_params()
-        states                                     = [State(mean, std**2, ) for mean, std in zip(means, stds)]
+        start_prob, means, vars, transition_matrix = self.get_hmm_params()
+        states                                     = [State(mean, var, ) for mean, var in zip(means, vars)]
         
         fwdbwd_hmm_out                             = self.forward_backward_log(y_data, states, np.log(start_prob), np.log(transition_matrix))
         best_path                                  = fwdbwd_hmm_out[1]
@@ -1401,8 +1375,10 @@ class DataFramePlotterApp:
     
 
     def run_2stage_changepoint_vector_state_hmm(self, y_data, state_changepoints, gamma):
-        start_prob, means, stds, transition_matrix = self.get_hmm_params()
-        states                                     = [State(mean, std**2, ) for mean, std in zip(means, stds)]
+        start_prob, means, vars, transition_matrix, d_params, v_params, s_params = self.get_hsmm_params()
+        dvs_params                                                               = [[d,v,s] for d,v,s in zip(d_params, v_params, s_params)]
+        states          = [State(mean, var, self.inverse_gauss_phys, dvs) for mean, var, dvs in zip(means, vars, dvs_params)]
+
 
         def split_time_series(time_series, changepoints):
             """
@@ -1424,9 +1400,10 @@ class DataFramePlotterApp:
 
             # Ensure changepoints are sorted
             #changepoints = sorted(changepoints)
-
             # Add the end of the series to the changepoints for final split
             changepoints = changepoints + [len(time_series)]
+            changepoints.insert(0, 0)
+
 
             # Generate sub-arrays
             segments = [
@@ -1437,21 +1414,17 @@ class DataFramePlotterApp:
 
 
         segments = split_time_series(y_data, state_changepoints)
-        print('1')
 
         vector_hmm_out = self.viterbi_algorithm_vector(segments, states, start_prob, transition_matrix, gamma, tol=1e-8)
-        print('2')
-        best_path = vector_hmm_out[0]
 
+        best_path = vector_hmm_out[0]
         best_path_pointwise = []
         num_segments = len(segments)
         for i in range(num_segments):
-            best_path_pointwise.append(np.repeat(means[best_path[i]], len(segments[i]))) 
+            best_path_pointwise.append(np.repeat(best_path[i], len(segments[i]))) 
         
         best_path_pointwise = np.concatenate(best_path_pointwise)
         emission_estimates = np.array([means[int(x)] for x in best_path_pointwise])
-
-        print('3')
 
         return best_path, emission_estimates
 
@@ -1645,7 +1618,6 @@ class DataFramePlotterApp:
         num_obs           = len(obs)
         log_viterbi_table = [[0.0 for _ in range(num_states)] for _ in range(num_obs)]
         backpointer       = [[0 for _ in range(num_states)] for _ in range(num_obs)]
-
         # Step 3: Calculate Probabilities
         for t in range(num_obs):
             for s in range(num_states):
@@ -1655,14 +1627,12 @@ class DataFramePlotterApp:
                     log_max_prob            = max(log_viterbi_table[t-1][prev_s] + np.log(transition_matrix[prev_s][s]) for prev_s in range(num_states))
                     log_viterbi_table[t][s] = log_max_prob + states[s].log_joint_n_xvec(obs[t], gamma, tol=tol)
                     backpointer[t][s]       = max(range(num_states), key=lambda prev_s: log_viterbi_table[t-1][prev_s] +  np.log(transition_matrix[prev_s][s]))
-
         # Step 4: Traceback and Find Best Path
         best_path_prob    = max(log_viterbi_table[-1])
         best_path_pointer = max(range(num_states), key=lambda s: log_viterbi_table[-1][s])
         best_path         = [best_path_pointer]
         for t in range(len(obs)-1, 0, -1):
             best_path.insert(0, backpointer[t][best_path[0]])
-
         # Step 5: Return Best Path
         return best_path, backpointer, log_viterbi_table
     
@@ -1726,7 +1696,7 @@ class DataFramePlotterApp:
                     forward_log_table[t - 1][prev_s] + transition_log_matrix[prev_s][s]
                     for prev_s in range(num_states)
                 ]
-                forward_log_table[t][s] = log_sum_exp(log_probs) + math.log(states[s].emission_probability(obs[t]))
+                forward_log_table[t][s] = self.log_sum_exp(log_probs) + math.log(states[s].emission_probability(obs[t]))
 
         # Step 4: Backward Pass (Initialization)
         for s in range(num_states):
@@ -1741,7 +1711,7 @@ class DataFramePlotterApp:
                     + math.log(states[next_s].emission_probability(obs[t + 1]))
                     for next_s in range(num_states)
                 ]
-                backward_log_table[t][s] = log_sum_exp(log_probs)
+                backward_log_table[t][s] = self.log_sum_exp(log_probs)
 
         # Step 6: Posterior Probabilities
         posterior_log_probs = [
@@ -1752,7 +1722,7 @@ class DataFramePlotterApp:
         # Normalize posterior probabilities in log-space
         posterior_probs = []
         for t in range(num_obs):
-            log_norm_factor = log_sum_exp(posterior_log_probs[t])
+            log_norm_factor = self.log_sum_exp(posterior_log_probs[t])
             posterior_probs.append([math.exp(lp - log_norm_factor) for lp in posterior_log_probs[t]])
 
         # Step 7: Most Likely State at Each Time Step

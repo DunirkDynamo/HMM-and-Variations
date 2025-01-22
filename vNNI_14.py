@@ -1513,14 +1513,37 @@ class DataFramePlotterApp:
     #################################################################################################################################################################################
     #################################################################################################################################################################################
     def get_best_duration_index(self, valid_states, best_duration):
+        '''
+        Purpose: The objective of this function is to return the index of the entry in valid_states for which the entry is equal to best_duration
+                 The is required in the hsmm viterbi algorithm. 
+
+        Input:
+            - valid_states (list of integers) - Entries correspond to values of discretized duration in the hsmm Viterbi algorithm
+            - best_duration (int)             - the duration parameter of the best previous state as determined by the HSMM Viterbi algorithm
+
+        Output:
+         - i (int) - when best_duration matches one of the entries of valid_states, we return the corresponding index, i, of valid_states
+        '''
         num_valid_states = len(valid_states)
-        for i in range(len(valid_states)):
+        for i in range(num_valid_states):
             if best_duration == valid_states[i]:
                 return i
         
         return None
 
     def get_cumulative_probability(self, pdf, low_bound, upp_bound, args):
+        '''
+        Purpose: Return the cumulative probability of some continuous probability distribution function, pdf. 
+                 This is required for computing transition probabilities in all models beyond the basic HMM.
+
+        Input:
+            - pdf (function)    : a probability distribution function
+            - low_bound (float) : the lower limit in the definite integral over the pdf
+            - upp_bound (float) : the upper limit in the definite integral over the pdf
+        
+        Output:
+         - result (float)       : the cumulative probability of the pdf between low_bound and upp_bound
+        '''
         from scipy.integrate import quad
         if args:
             result, error = quad(pdf, low_bound, upp_bound, tuple(args))
@@ -1529,6 +1552,28 @@ class DataFramePlotterApp:
         return result
 
     def get_low_lim(self, tcut, thresh, f, alpha, args):
+        '''
+        Purpose: 
+                This function returns the difference between a specified value, alpha, and the integral 
+                a probability distribution function between the values of thresh (lower limit) and tcut
+                (upper limit).
+                This function is intended to be use as a loss function where we solve for tcut, given a
+                 pdf and associated alpha value, where thresh is then  the minimum of the domain of the 
+                 pdf (often -inf, or zero .... but not always!).
+                 The solution is the value of tcut, or cut-off value, which defines the lower "tail"
+                 of the pdf, such that the probability of a value below tcut is equal to alpha. 
+
+        Input:
+            - tcut (float)   : upper limit of the integral over f
+            - f (function)   : a probability distribution function
+            - thresh (float) : lower limit of the integral over f
+            - alpha (float)  : target value of the integral over f, representing the probability contained between
+                               thresh and tcut
+            - args (list)    : any argumenty/parameters required to specify f
+        Output:
+
+         
+        '''
         return self.get_cumulative_probability(f, thresh, tcut, args) - alpha
 
     def get_upp_lim(self, tcut, thresh, f, alpha, args):
@@ -1986,15 +2031,12 @@ class DataFramePlotterApp:
                                         key=lambda x: log_viterbi_table[-1][x[0]][x[1]]
                                         )
 
-        best_duration = valid_state_table[-1][best_state][best_duration_index]#best_duration_index + min_duration[best_state]
+        best_duration = valid_state_table[-1][best_state][best_duration_index]
         best_path.append((best_state, best_duration))
 
         t                = num_obs - 1
         current_duration = best_duration
         while t - current_duration >= 0:
-            
-
-            #best_duration_index = get_best_duration_index(valid_state_table[t-best_duration])
             prev_state, prev_duration = backpointer[t][best_state][best_duration_index]
 
             best_path.insert(0, (prev_state, prev_duration))
